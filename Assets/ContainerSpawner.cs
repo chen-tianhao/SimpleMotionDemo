@@ -1,3 +1,4 @@
+using Assets.SingaPort;
 using UnityEngine;
 
 public class ContainerSpawner : MonoBehaviour
@@ -9,59 +10,80 @@ public class ContainerSpawner : MonoBehaviour
 
     void Start()
     {
-        // ① 选一个 Prefab（这里用随机）
-        int index = Random.Range(0, containerPrefabs.Length);
-        GameObject selectedPrefab = containerPrefabs[index];
+        // // ① 选一个 Prefab（这里用随机）
+        // int index = Random.Range(0, containerPrefabs.Length);
+        // GameObject selectedPrefab = containerPrefabs[index];
 
-        // ② ⭐真正生成“实际 GameObject”的代码（核心）
-        GameObject containerInstance = Instantiate(
-            selectedPrefab,          // Prefab（模板）
-            Vector3.zero,             // 世界坐标
-            Quaternion.identity       // 不旋转
-        );
-
-        containerInstance.name = "Container_Runtime";
+        // // ② 真正生成“实际 GameObject”
+        // GameObject containerInstance = Instantiate(selectedPrefab, Vector3.zero, Quaternion.identity);
+        // containerInstance.name = "Container_Runtime";
     }
 
-    public GameObject SpawnOne(Size size, int groupIdx = -1)
+    public GameObject SpawnOne()
     {
-        int colorIdx = groupIdx < 0 ? Random.Range(0, containerPrefabs.Length/2) : groupIdx % (containerPrefabs.Length/2);
+        GameObject selectedPrefab = containerPrefabs[0];
+        GameObject containerInstance = Instantiate(selectedPrefab, Vector3.zero, Quaternion.identity);
+        // 初始设为不可见，直到被放置到目标位置，避免在原点短暂或持续可见
+        containerInstance.SetActive(false);
+        var rotation = new Vector3(0, 90f, 0);
+        containerInstance.transform.rotation = Quaternion.Euler(rotation);
+        return containerInstance;
+    }
+
+    public GameObject SpawnOne(Assets.SingaPort.Group group)
+    {
+        int colorIdx = group.Index < 0 ? Random.Range(0, containerPrefabs.Length/2) : group.Index % (containerPrefabs.Length/2);
         
-        float containerLength = 6.1f;
+        float teuLength = 6.1f;
         float containerHeight = 2.44f;
         float containerWidth = 2.59f;
-        switch (size)
+        float containerLength = teuLength;
+        switch (group.TEUs)
         {
-            case Size.TwentyFeet:
-                containerLength = 6.1f;
+            case 1:
+                containerLength = teuLength;
                 break;
-            case Size.FortyFeet:
-                containerLength = 12.2f;
+            case 2:
+                containerLength = teuLength * 2;
                 colorIdx += containerPrefabs.Length/2; // using 40ft prefab
                 break;
             default:
-                Debug.LogError($"Container Size Not Specified: {size}");
+                Debug.LogError($"Container Size (group.TEUs) Not Specified: {group.TEUs}");
                 break;
         }
         GameObject prefab = containerPrefabs[colorIdx];
 
         GameObject instance = Instantiate(prefab, Vector3.zero, Quaternion.identity);
+        // 初始设为不可见，等被放置时由上层激活
+        instance.SetActive(false);
         Renderer rend = instance.GetComponentInChildren<Renderer>(); 
         if (rend != null)
         {
             // boundSize 就是素材自带的原始“长宽高”
             Vector3 originalSize = rend.bounds.size;
 
-            // 4. 计算需要的缩放比例
-            // 目标 / 原始 = 需要的 Scale
-            // 注意：这里假设模型的轴向是标准的 (X=长, Y=高, Z=宽)，如果不是，需要调换 x/y/z
-            float scaleX = containerWidth / originalSize.x;
-            float scaleY = containerHeight / originalSize.y;
-            float scaleZ = containerLength / originalSize.z;
-            
-            // 某些素材可能需要整体一致缩放，取平均值或最大值，这里演示分别缩放
-            instance.transform.localScale = new Vector3(scaleX, scaleY, scaleZ);
+            float scaleX, scaleY, scaleZ;
 
+            // 假设 Y 轴总是高度（这通常没错）
+            scaleY = containerHeight / originalSize.y;
+
+            // 比较 X 和 Z 谁更长，谁长谁就是 Length，短的就是 Width
+            if (originalSize.x > originalSize.z)
+            {
+                // 原始模型 X 是长边
+                scaleX = containerLength / originalSize.x; 
+                scaleZ = containerWidth / originalSize.z;
+            }
+            else
+            {
+                // 原始模型 Z 是长边
+                scaleZ = containerLength / originalSize.z;
+                scaleX = containerWidth / originalSize.x;
+            }
+
+            Debug.Log($"======> Original Size: {originalSize}, Scale: ({scaleX}, {scaleY}, {scaleZ})");
+            instance.transform.localScale = new Vector3(scaleX, scaleY, scaleZ);
+            
             // 5. 修正位置（因为缩放是基于中心点的，可能需要把底面抬高到地面）
             // 重新计算 bounds，因为缩放后 bounds 变了
             float groundOffset = instance.transform.localScale.y * originalSize.y / 2f;
@@ -76,6 +98,28 @@ public class ContainerSpawner : MonoBehaviour
         var rotation = new Vector3(0, 90f, 0);
         instance.transform.rotation = Quaternion.Euler(rotation);
 
+        // if (group.Index >= 0)
+        // {
+        //     AddGroupLabel(instance, group);
+        // }
+        
         return instance; // 返回生成的 container
+    }
+
+    private void AddGroupLabel(GameObject parent, Group group)
+    {
+        var label = new GameObject("GroupLabel");
+        float offsetX = group.TEUs == 1 ? Block.SlotLength / 2 : Block.SlotLength;
+        label.transform.SetParent(parent.transform, true);
+        label.transform.localPosition = new Vector3(offsetX, 1f, 0f);
+        label.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+
+        var textMesh = label.AddComponent<TextMesh>();
+        textMesh.text = $"G{group.Index}";
+        textMesh.color = UnityEngine.Color.yellowNice;
+        textMesh.fontSize = 50;
+        textMesh.characterSize = 0.2f;
+        textMesh.anchor = TextAnchor.MiddleCenter;
+        textMesh.alignment = TextAlignment.Center;
     }
 }

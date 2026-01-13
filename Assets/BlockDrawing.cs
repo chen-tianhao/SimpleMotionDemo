@@ -20,11 +20,11 @@ namespace Assets
                     var stackHeight = bay.Stacks[j].Count;
                     for (int k = 0; k < stackHeight; k++)
                     {
-                        var ctn = bay.ContainerSize == ContainerSize.TwentyFeet ?
-                            IsoContainer.GetObject(IsoContainer.Size.TwentyFeet) :
-                            IsoContainer.GetObject(IsoContainer.Size.FortyFeet);
-                        ctn.transform.position += position;
-                        ctn.transform.SetParent(go.transform, true);
+                        // var ctn = bay.ContainerSize == ContainerSize.TwentyFeet ?
+                        //     IsoContainer.GetObject(IsoContainer.Size.TwentyFeet) :
+                        //     IsoContainer.GetObject(IsoContainer.Size.FortyFeet);
+                        // ctn.transform.position += position;
+                        // ctn.transform.SetParent(go.transform, true);
                         position[1] += Block.SlotHeight;
                     }
                     position[1] = 0;

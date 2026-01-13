@@ -28,7 +28,7 @@ namespace Assets
         private ContainerSpawner containerSpawner = null!;
         public double AveragePswcGroupSize { get; set; } = 6.5;//13.0;
         public int NumberOfGroupArrivals { get; private set; } = 0;
-        public int NumberOfGroup { get; private set; } = 4;
+        public int NumberOfGroup { get; private set; } = 12;
         public Dictionary<int, Group> DwellingGroupsByIndex = new Dictionary<int, Group>();
         internal Inventory inventory = new Inventory();
 
@@ -57,7 +57,7 @@ namespace Assets
                 for (int j = 0; j < group.Size; j++)
                 {
                     //var container = new Assets.SingaPort.Container(rs.NextDouble() < 0.4 ? ContainerSize.TwentyFeet : ContainerSize.FortyFeet);
-                    var container = new Container(group); //Only use 20ft for refulling demo
+                    var container = new Container(group); // 20ft or 40ft is defined by group.TEUs
                     // int? bayIndex = null, rowIndex = null, tierIndex = null;
                     // var result = block.StackContainer(container, rs, ref bayIndex, ref rowIndex, ref tierIndex);
                     // if (!result)
@@ -98,11 +98,19 @@ namespace Assets
                         return;
                     }
                 }
-                var go = containerSpawner.SpawnOne(ContainerSpawner.Size.TwentyFeet, container.Group.Index);
+
+                // // 位置方向静态测试代码
+                // var go = containerSpawner.SpawnOne();
+                // var pos = new Vector3(10, 0, -50);
+                // Place("test-1", go, pos + new Vector3(), go.transform.eulerAngles);
+
+                var go = containerSpawner.SpawnOne(container.Group);
                 var pos = new Vector3(0, 0, 0);
 
-                if (slot.Bay % 2 == 1) pos[0] = Block.SlotLength * (slot.Bay - 1) / 2; // 奇数是20尺箱
-                else pos[0] = Block.SlotLength * (slot.Bay / 2 - 1); // 偶数是40尺箱，占两个bay
+                if (slot.Bay % 2 == 1) 
+                    pos[0] = Block.SlotLength * (slot.Bay - 1) / 2; // 奇数是20尺箱
+                else 
+                    pos[0] = Block.SlotLength * (slot.Bay / 2 - 0.5f); // 偶数是40尺箱，位于相邻两个奇数bay中间
                 pos[1] = (slot.Tier - 1) * Block.SlotHeight;
                 pos[2] = (slot.Row - 1) * Block.SlotWidth;
                 AddCmd(t, () => Stack($"Ctn#{container.Index}", go, pos, 5f, 10f));
@@ -112,7 +120,8 @@ namespace Assets
                 if (block.NumTEUs > block.CapacityTEUs * 0.6) break;
             }
 
-            //AddCmd for unstacking containers
+            // //AddCmd for unstacking containers
+            /*
             for (int i = 0; i < 10; i++)
             {
                 var emptyGroupKeys = DwellingGroupsByIndex.Where(kv => kv.Value.Containers.Count == 0).Select(kv => kv.Key).ToList();
@@ -142,46 +151,42 @@ namespace Assets
                 }
                 // if (block.NumTEUs < block.CapacityTEUs * 0.2) break;
             }
+            */
 
-            //AddCmd for reshuffling containers
-
-            //for (int i = 0; i < 10; i++)
-            //{
-            //    var k = i;
-            //    var id = $"Ctn#{k}";
-
-            //    AddCmd(i, () => Stack(id, IsoContainer.GetObject(), new Vector3(0, 0, k * 15 + 5), 3f, 3f));
-
-            //    //AddCmd(new Cmd
-            //    //{
-            //    //    Time = i ,
-            //    //    Action = () => Place(id, IsoContainer.GetObject(), new Vector3(0, 0, k * 15 + 5), new Vector3(0, 360f * k/10f, 0))
-            //    //});
-
-            //    //AddCmd(new Cmd
-            //    //{
-            //    //    Time = i * 10 + 5,
-            //    //    Action = () => SetPosition(id, new Vector3(0, 10, k * 15 + 5), new Vector3(0, 10, 0))
-            //    //});
-
-            //    //AddCmd(new Cmd
-            //    //{
-            //    //    Time = i * 10 + 10,
-            //    //    Action = () => SetVelocity(id, new Vector3(1, 1, 1), new Vector3(0, 1, 0))
-            //    //});
-
-            //    //AddCmd(new Cmd
-            //    //{
-            //    //    Time = i * 10 + 15,
-            //    //    Action = () => SetAcceleration(id, new Vector3(-1, -1, 1), new Vector3(0, 10, 0))
-            //    //});
-
-            //    //AddCmd(new Cmd
-            //    //{
-            //    //    Time = i * 10 + 30,
-            //    //    Action = () => Remove(id)
-            //    //});
-            //}
+            // AddCmd for reshuffling containers
+            /*
+            for (int i = 0; i < 10; i++)
+            {
+               var k = i;
+               var id = $"Ctn#{k}";
+               AddCmd(i, () => Stack(id, IsoContainer.GetObject(), new Vector3(0, 0, k * 15 + 5), 3f, 3f));
+               //AddCmd(new Cmd
+               //{
+               //    Time = i ,
+               //    Action = () => Place(id, IsoContainer.GetObject(), new Vector3(0, 0, k * 15 + 5), new Vector3(0, 360f * k/10f, 0))
+               //});
+               //AddCmd(new Cmd
+               //{
+               //    Time = i * 10 + 5,
+               //    Action = () => SetPosition(id, new Vector3(0, 10, k * 15 + 5), new Vector3(0, 10, 0))
+               //});
+               //AddCmd(new Cmd
+               //{
+               //    Time = i * 10 + 10,
+               //    Action = () => SetVelocity(id, new Vector3(1, 1, 1), new Vector3(0, 1, 0))
+               //});
+               //AddCmd(new Cmd
+               //{
+               //    Time = i * 10 + 15,
+               //    Action = () => SetAcceleration(id, new Vector3(-1, -1, 1), new Vector3(0, 10, 0))
+               //});
+               //AddCmd(new Cmd
+               //{
+               //    Time = i * 10 + 30,
+               //    Action = () => Remove(id)
+               //});
+            }
+            */
 
             StartTime = Time.time;
         }
@@ -226,14 +231,14 @@ namespace Assets
 
         void Stack(string id, GameObject go, Vector3 pos, float speed, float offset)
         {
-            Place(id, go, pos + new Vector3(0, offset, 0), new Vector3(0, 90f, 0));
+            Place(id, go, pos + new Vector3(0, offset, 0), go.transform.eulerAngles);
             SetVelocity(id, new Vector3(0, -speed, 0), new Vector3());
             var a = speed * speed / (2 * offset);
             SetAcceleration(id, new Vector3(0, a, 0), new Vector3());
             var t = speed / a;
             AddCmd(Time.time + t, () => SetAcceleration(id, new Vector3(), new Vector3()));
             AddCmd(Time.time + t, () => SetVelocity(id, new Vector3(), new Vector3()));
-            AddCmd(Time.time + t, () => SetPosition(id, pos, new Vector3(0, 90f, 0)));
+            AddCmd(Time.time + t, () => SetPosition(id, pos, go.transform.eulerAngles));
         }
 
         void Unstack(string id, float speed, float offset)
@@ -247,7 +252,7 @@ namespace Assets
                 var t = speed / a;
                 AddCmd(Time.time + t, () => SetAcceleration(id, new Vector3(), new Vector3()));
                 AddCmd(Time.time + t, () => SetVelocity(id, new Vector3(), new Vector3()));
-                AddCmd(Time.time + t, () => SetPosition(id, pos + new Vector3(0, offset, 0), new Vector3(0, 90f, 0)));
+                AddCmd(Time.time + t, () => SetPosition(id, pos + new Vector3(0, offset, 0), go.transform.eulerAngles));
                 AddCmd(Time.time + t + 1, () => Remove(id));
             }
         }
@@ -264,7 +269,7 @@ namespace Assets
                 var tu = speed / au;
                 AddCmd(Time.time + tu, () => SetAcceleration(id, new Vector3(), new Vector3()));
                 AddCmd(Time.time + tu, () => SetVelocity(id, new Vector3(), new Vector3()));
-                AddCmd(Time.time + tu, () => SetPosition(id, pos + new Vector3(0, offset, 0), new Vector3(0, 90f, 0)));
+                AddCmd(Time.time + tu, () => SetPosition(id, pos + new Vector3(0, offset, 0), go.transform.eulerAngles));
                 // move horizontal
                 
                 // move down
@@ -275,13 +280,15 @@ namespace Assets
                 var td = tu;
                 AddCmd(Time.time + td, () => SetAcceleration(id, new Vector3(), new Vector3()));
                 AddCmd(Time.time + td, () => SetVelocity(id, new Vector3(), new Vector3()));
-                AddCmd(Time.time + td, () => SetPosition(id, targetPos, new Vector3(0, 90f, 0)));
+                AddCmd(Time.time + td, () => SetPosition(id, targetPos, go.transform.eulerAngles));
             }
         }
 
         void Place(string id, GameObject go, Vector3 pos, Vector3 dir)
         {
             ObjectsById[id] = go;
+            // 激活对象（如果之前为不可见），再设置位置和朝向
+            go.SetActive(true);
             go.name = $"Obj_{id}";
             go.transform.position = pos;
             go.transform.rotation = Quaternion.Euler(dir);
