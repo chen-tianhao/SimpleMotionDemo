@@ -1,0 +1,28 @@
+# Unity generated
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+[Ll]ogs/
+/[Mm]emoryCaptures/
+UserSettings/Layouts/
+
+# Visual Studio / Rider
+.vs/
+.vscode/
+.idea/
+*.csproj
+*.unityproj
+*.sln.DotSettings.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Plastic SCM
+.plastic/
+
+# Build outputs
+[Bb]uild/
+[Bb]uilds/

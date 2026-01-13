@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!162 &1
+EditorUserSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 4
+  m_ConfigSettings:
+    GraphicsSettingsInspector_UserSettings:
+      value: 18134705175a055722080a3115371d4a0d55006876786860616b0471b8b46c6eacb72ba5a52a362c3c0ee63201181433fe3e101bf3250b06144ca74c24f1190708e016c213c61a52f91c12cac80fd8edd298e1e4d1fde2cacddeacbcc1fee7eef0e3b6faa69af9ceaeaaec81a6d2c2c8c8c4b2e5dfd5ccd3f8cf
+      flags: 0
+    RecentlyUsedSceneGuid-0:
+      value: 0507500051035f595b565c7b44210944134e1a732d7871322c284a66b6e43268
+      flags: 0
+    RecentlyUsedSceneGuid-1:
+      value: 5154015756530802550b5f2447730b4417151a7f7f2a27662e2b1b31e7b2356e
+      flags: 0
+    RecentlyUsedSceneGuid-2:
+      value: 55070d0007035d0a590b597016225c44434f4d2e7b7971687b2a4c66bab73039
+      flags: 0
+    RecentlyUsedSceneGuid-3:
+      value: 505701515d005c085e0c587144730744174f1c7e292c746879784f30b3b1676e
+      flags: 0
+    RecentlyUsedSceneGuid-4:
+      value: 5404005f5457585d0957542347215a44424f4c7e752a246929284830b4b76639
+      flags: 0
+    RecentlyUsedSceneGuid-5:
+      value: 55075155500c5a5d0f5a5c2445205a44434f417b7f2e7162742c4932e0b46d3e
+      flags: 0
+    RecentlyUsedSceneGuid-6:
+      value: 0501075455065c030e0d5e7411210d4446164e72757977352c281965b2b16461
+      flags: 0
+    RecentlyUsedSceneGuid-7:
+      value: 5a08575f5207595a0f5d59741173094444164f7d7d2a23317c7a4465bbe1646d
+      flags: 0
+    vcSharedLogLevel:
+      value: 0d5e400f0650
+      flags: 0
+  m_VCAutomaticAdd: 1
+  m_VCDebugCom: 0
+  m_VCDebugCmd: 0
+  m_VCDebugOut: 0
+  m_SemanticMergeMode: 2
+  m_DesiredImportWorkerCount: 5
+  m_StandbyImportWorkerCount: 2
+  m_IdleImportWorkerShutdownDelay: 60000
+  m_VCShowFailedCheckout: 1
+  m_VCOverwriteFailedCheckoutAssets: 1
+  m_VCProjectOverlayIcons: 1
+  m_VCHierarchyOverlayIcons: 1
+  m_VCOtherOverlayIcons: 1
+  m_VCAllowAsyncUpdate: 1
+  m_VCScanLocalPackagesOnConnect: 1
+  m_ArtifactGarbageCollection: 1
+  m_CompressAssetsOnImport: 1
