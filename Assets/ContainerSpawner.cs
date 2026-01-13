@@ -1,4 +1,6 @@
 using Assets.SingaPort;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class ContainerSpawner : MonoBehaviour
@@ -7,6 +9,19 @@ public class ContainerSpawner : MonoBehaviour
 
     [SerializeField]
     private GameObject[] containerPrefabs;
+
+    // 记录每个 group 使用的 prefab 索引，保证同组一致、组间不重复
+    private readonly Dictionary<int, int> groupPrefabMap = new();
+    // 预先分好 20ft / 40ft 的 prefab 索引池
+    private Queue<int> availableTwenty = null!;
+    private Queue<int> availableForty = null!;
+
+    void Awake()
+    {
+        int half = containerPrefabs.Length / 2;
+        availableTwenty = new Queue<int>(Enumerable.Range(0, half));
+        availableForty = new Queue<int>(Enumerable.Range(half, containerPrefabs.Length - half));
+    }
 
     void Start()
     {
@@ -32,8 +47,42 @@ public class ContainerSpawner : MonoBehaviour
 
     public GameObject SpawnOne(Assets.SingaPort.Group group)
     {
-        int colorIdx = group.Index < 0 ? Random.Range(0, containerPrefabs.Length/2) : group.Index % (containerPrefabs.Length/2);
-        
+        // 选择 prefab：20ft 用前半区，40ft 用后半区；同组固定，同 TEU 的不同组不重复
+        int colorIdx;
+        if (!groupPrefabMap.TryGetValue(group.Index, out colorIdx))
+        {
+            if (group.TEUs == 1)
+            {
+                if (availableTwenty.Count == 0)
+                {
+                    Debug.LogError("No 20ft prefab left to assign.");
+                    colorIdx = 0;
+                }
+                else
+                {
+                    colorIdx = availableTwenty.Dequeue();
+                }
+            }
+            else if (group.TEUs == 2)
+            {
+                if (availableForty.Count == 0)
+                {
+                    Debug.LogError("No 40ft prefab left to assign.");
+                    colorIdx = containerPrefabs.Length / 2; // fallback
+                }
+                else
+                {
+                    colorIdx = availableForty.Dequeue();
+                }
+            }
+            else
+            {
+                Debug.LogError($"Container Size (group.TEUs) Not Specified: {group.TEUs}");
+                colorIdx = 0;
+            }
+            groupPrefabMap[group.Index] = colorIdx;
+        }
+
         float teuLength = 6.1f;
         float containerHeight = 2.44f;
         float containerWidth = 2.59f;
@@ -45,7 +94,6 @@ public class ContainerSpawner : MonoBehaviour
                 break;
             case 2:
                 containerLength = teuLength * 2;
-                colorIdx += containerPrefabs.Length/2; // using 40ft prefab
                 break;
             default:
                 Debug.LogError($"Container Size (group.TEUs) Not Specified: {group.TEUs}");
@@ -73,15 +121,15 @@ public class ContainerSpawner : MonoBehaviour
                 // 原始模型 X 是长边
                 scaleX = containerLength / originalSize.x; 
                 scaleZ = containerWidth / originalSize.z;
+                Debug.Log($"Container Length mapped to X axis. scaleX: {scaleX}, scaleZ: {scaleZ}");
             }
             else
             {
                 // 原始模型 Z 是长边
                 scaleZ = containerLength / originalSize.z;
                 scaleX = containerWidth / originalSize.x;
+                Debug.Log($"Container Length mapped to Z axis. scaleX: {scaleX}, scaleZ: {scaleZ}");
             }
-
-            Debug.Log($"======> Original Size: {originalSize}, Scale: ({scaleX}, {scaleY}, {scaleZ})");
             instance.transform.localScale = new Vector3(scaleX, scaleY, scaleZ);
             
             // 5. 修正位置（因为缩放是基于中心点的，可能需要把底面抬高到地面）
@@ -98,10 +146,10 @@ public class ContainerSpawner : MonoBehaviour
         var rotation = new Vector3(0, 90f, 0);
         instance.transform.rotation = Quaternion.Euler(rotation);
 
-        // if (group.Index >= 0)
-        // {
-        //     AddGroupLabel(instance, group);
-        // }
+        if (group.Index >= 0)
+        {
+            AddGroupLabel(instance, group);
+        }
         
         return instance; // 返回生成的 container
     }
@@ -109,16 +157,17 @@ public class ContainerSpawner : MonoBehaviour
     private void AddGroupLabel(GameObject parent, Group group)
     {
         var label = new GameObject("GroupLabel");
-        float offsetX = group.TEUs == 1 ? Block.SlotLength / 2 : Block.SlotLength;
-        label.transform.SetParent(parent.transform, true);
-        label.transform.localPosition = new Vector3(offsetX, 1f, 0f);
-        label.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+        // float offsetX = group.TEUs == 1 ? Block.SlotLength / 2 : Block.SlotLength;
+        label.transform.SetParent(parent.transform, false);
+        label.transform.localPosition = new Vector3(0f, 1f, 0f);
+        // 使标签平躺在 XZ 平面上并绕 Y 轴旋转 90°（从 Y 轴俯视为平放）
+        label.transform.localRotation = Quaternion.Euler(90f, 270f, 0f);
 
         var textMesh = label.AddComponent<TextMesh>();
         textMesh.text = $"G{group.Index}";
         textMesh.color = UnityEngine.Color.yellowNice;
-        textMesh.fontSize = 50;
-        textMesh.characterSize = 0.2f;
+        textMesh.fontSize = 20;
+        textMesh.characterSize = 0.1f;
         textMesh.anchor = TextAnchor.MiddleCenter;
         textMesh.alignment = TextAlignment.Center;
     }
