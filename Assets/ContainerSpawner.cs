@@ -121,14 +121,14 @@ public class ContainerSpawner : MonoBehaviour
                 // 原始模型 X 是长边
                 scaleX = containerLength / originalSize.x; 
                 scaleZ = containerWidth / originalSize.z;
-                Debug.Log($"Container Length mapped to X axis. scaleX: {scaleX}, scaleZ: {scaleZ}");
+                // Debug.Log($"Container Length mapped to X axis. scaleX: {scaleX}, scaleZ: {scaleZ}");
             }
             else
             {
                 // 原始模型 Z 是长边
                 scaleZ = containerLength / originalSize.z;
                 scaleX = containerWidth / originalSize.x;
-                Debug.Log($"Container Length mapped to Z axis. scaleX: {scaleX}, scaleZ: {scaleZ}");
+                // Debug.Log($"Container Length mapped to Z axis. scaleX: {scaleX}, scaleZ: {scaleZ}");
             }
             instance.transform.localScale = new Vector3(scaleX, scaleY, scaleZ);
             

@@ -38,7 +38,6 @@ namespace Assets
 
         void Start()
         {
-            Debug.Log("Test Debug.Log");
             var rs = new System.Random(0);
             var block = new Block(5, 8, 4);
             float t = 0;
@@ -117,15 +116,15 @@ namespace Assets
                 pos[1] = (slot.Tier - 1) * Block.SlotHeight;
                 pos[2] = (slot.Row - 1) * Block.SlotWidth;
                 AddCmd(t, () => Stack($"Ctn#{container.Index}", go, pos, 5f, 10f));
-                t += 3;
-                Debug.Log($"Stacking Ctn#{container.Index} at Bay {slot.Bay}, Row {slot.Row}, Tier {slot.Tier}");
+                t += 0.1f;
 
                 if (block.NumTEUs > block.CapacityTEUs * 0.6) break;
             }
 
             ////////////////////////////////////////////////////////////////////////////////////////
+            t += 5f;
             //AddCmd for unstacking containers
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < 4; i++)
             {
                 var emptyGroupKeys = DwellingGroupsByIndex.Where(kv => kv.Value.Containers.Count == 0).Select(kv => kv.Key).ToList();
                 foreach (var key in emptyGroupKeys)
@@ -137,20 +136,12 @@ namespace Assets
                 if (nonEmptyGroups.Count > 0)
                 {
                     var chosen = nonEmptyGroups[rs.Next(nonEmptyGroups.Count)];
-                    Debug.Log($"Picked group #{chosen.Index} with {chosen.Containers.Count} containers.");
+                    Debug.Log($"Picked G#{chosen.Index} (Size={chosen.Size})");
                     Container? unstackingContainer = inventory.GetBestJobByPswc(block, chosen);
-                    if (unstackingContainer == null)
-                    {
-                        Debug.LogWarning("No container available for unstacking.");
-                    }
-                    else
-                    {
-                        inventory.Update(unstackingContainer, Inventory.JobType.Unstacking);
-                        chosen.Containers.Remove(unstackingContainer);
-                        AddCmd(t, () => Unstack($"Ctn#{unstackingContainer.Index}", 5f, 10f));
-                        t += 3;
-                        Debug.Log($"Unstacking Ctn#{unstackingContainer.Index} from Bay {unstackingContainer.Slot.Bay}, Row {unstackingContainer.Slot.Row}, Tier {unstackingContainer.Slot.Tier}");
-                    }
+                    if (unstackingContainer == null) continue;
+                    //////////
+                    UnstackOne(unstackingContainer, ref t);
+                    //////////
                 }
                 // if (block.NumTEUs < block.CapacityTEUs * 0.2) break;
             }
@@ -191,6 +182,80 @@ namespace Assets
             */
 
             StartTime = Time.time;
+        }
+
+        void UnstackOne(Container container, ref float t)
+        {
+            if (container == null)
+            {
+                Debug.LogWarning("No container available for unstacking.");
+            }
+            else
+            {
+                if (inventory.UnstackWithoutReshuffle(container)) // can unstack directly
+                {
+                    inventory.Update(container, Inventory.JobType.Unstacking);
+                    container.Group.Containers.Remove(container);
+                    AddCmd(t, () => Unstack($"Ctn#{container.Index}", 5f, 10f));
+                    t += 3;
+                    Debug.Log($"Unstacking Ctn#{container.Index}(G#{container.Group.Index}) from Slot({container.Slot.Bay},{container.Slot.Row},{container.Slot.Tier})");
+                }
+                else // need to reshuffle first
+                {
+                    Container? rContainer = inventory.Peek(container.Block, container.Slot);
+                    if (rContainer != null)
+                    {
+                        var targetSlot = inventory.DecideReshuffleTarget(rContainer, container);
+                        if (targetSlot == null)
+                        {
+                            Debug.LogWarning("No target slot available for reshuffling.");
+                            return;
+                        }
+                        if (targetSlot.Bay != rContainer.Slot.Bay) // need gantry move
+                        {
+                            // Ignore this case in demo for simplicity
+                        }
+                        else
+                        {
+                            Debug.Log($"Reshuffling Ctn#{rContainer.Index} from Slot({rContainer.Slot.Bay},{rContainer.Slot.Row},{rContainer.Slot.Tier}) to Slot({targetSlot.Bay},{targetSlot.Row},{targetSlot.Tier})");
+                            ReshuffleOne(rContainer, targetSlot, ref t);
+                        }
+                        // unstack the container on top first
+                        // UnstackOne(rContainer, ref t);
+                        // then unstack the target container
+                        UnstackOne(container, ref t);
+                    }
+                }
+            }
+        }
+
+        void ReshuffleOne(Container container, Slot targetSlot, ref float t)
+        {
+            if (container == null)
+            {
+                Debug.LogWarning("No container available for reshuffling.");
+            }
+            else
+            {
+                // remove from current slot
+                inventory.Update(container, Inventory.JobType.Unstacking);
+
+                var pos = new Vector3(0, 0, 0);
+
+                if (targetSlot.Bay % 2 == 1) 
+                    pos[0] = Block.SlotLength * (targetSlot.Bay - 1) / 2; // 奇数是20尺箱
+                else 
+                    pos[0] = Block.SlotLength * (targetSlot.Bay / 2 - 0.5f); // 偶数是40尺箱，位于相邻两个奇数bay中间
+                pos[1] = (targetSlot.Tier - 1) * Block.SlotHeight;
+                pos[2] = (targetSlot.Row - 1) * Block.SlotWidth;
+
+                AddCmd(t, () => Reshuffle($"Ctn#{container.Index}", pos, 5f, 10f));
+                t += 5;
+
+                // place to target slot
+                container.Slot = targetSlot;
+                inventory.Update(container, Inventory.JobType.Stacking);
+            }
         }
 
         void AddCmd(float time, Action action)
@@ -237,7 +302,7 @@ namespace Assets
             {
                 simStarted = true;
                 sim.Arrive(1);
-                sim.Run(TimeSpan.FromMinutes(3));
+                sim.Run(TimeSpan.FromMinutes(1));
             }
             Place(id, go, pos + new Vector3(0, offset, 0), go.transform.eulerAngles);
             SetVelocity(id, new Vector3(0, -speed, 0), new Vector3());
@@ -251,8 +316,13 @@ namespace Assets
 
         void Unstack(string id, float speed, float offset)
         {
-            if (ObjectsById.TryGetValue(id, out var go) && go != null)
+            if (ObjectsById.TryGetValue(id, out var go))
             {
+                if (go == null)
+                {
+                    Debug.LogError($"Cannot find object with id {id} for unstacking.");
+                    return;
+                }
                 Vector3 pos = go.transform.position;
                 SetVelocity(id, new Vector3(0, speed, 0), new Vector3());
                 var a = speed * speed / (2 * offset);
@@ -267,34 +337,62 @@ namespace Assets
 
         void Reshuffle(string id, Vector3 targetPos, float speed, float offset)
         {
-            if (ObjectsById.TryGetValue(id, out var go) && go != null)
+            if (ObjectsById.TryGetValue(id, out var go))
             {
+                if (go == null)
+                {
+                    Debug.LogError($"Cannot find object with id {id} for reshuffling.");
+                    return;
+                }
                 Vector3 pos = go.transform.position;
+                var baseTime = Time.time - StartTime; // Align with the same time axis used by the command queue
+
                 // move up
                 SetVelocity(id, new Vector3(0, speed, 0), new Vector3());
                 var au = speed * speed / (2 * offset);
-                SetAcceleration(id, new Vector3(0, -au, 0), new Vector3());
                 var tu = speed / au;
-                AddCmd(Time.time + tu, () => SetAcceleration(id, new Vector3(), new Vector3()));
-                AddCmd(Time.time + tu, () => SetVelocity(id, new Vector3(), new Vector3()));
-                AddCmd(Time.time + tu, () => SetPosition(id, pos + new Vector3(0, offset, 0), go.transform.eulerAngles));
-                // move horizontal
+                SetAcceleration(id, new Vector3(0, -au, 0), new Vector3());
+                AddCmd(baseTime + tu, () => SetAcceleration(id, Vector3.zero, Vector3.zero));
+                AddCmd(baseTime + tu, () => SetVelocity(id, Vector3.zero, Vector3.zero));
+                AddCmd(baseTime + tu, () => SetPosition(id, pos + new Vector3(0, offset, 0), go.transform.eulerAngles));
+
+                // move horizontal toward target (only if there is horizontal displacement)
+                var horizontal = new Vector3(targetPos.x - pos.x, 0f, targetPos.z - pos.z);
+                var dist = horizontal.magnitude;
+                float th = 0f;
+                if (dist > 0.01f)
+                {
+                    var dir = horizontal / dist;
+                    var ah = speed * speed / (2 * dist);
+                    th = speed / ah;
+                    AddCmd(baseTime + tu, () => SetVelocity(id, dir * speed, Vector3.zero));
+                    AddCmd(baseTime + tu, () => SetAcceleration(id, dir * -ah, Vector3.zero));
+                    AddCmd(baseTime + tu + th, () => SetAcceleration(id, Vector3.zero, Vector3.zero));
+                    AddCmd(baseTime + tu + th, () => SetVelocity(id, Vector3.zero, Vector3.zero));
+                    AddCmd(baseTime + tu + th, () => SetPosition(id, targetPos + new Vector3(0, offset, 0), go.transform.eulerAngles));
+                }
+                else
+                {
+                    // No horizontal move needed; jump to above target
+                    AddCmd(baseTime + tu, () => SetPosition(id, targetPos + new Vector3(0, offset, 0), go.transform.eulerAngles));
+                }
                 
                 // move down
-                // Place(id, go, targetPos + new Vector3(0, offset, 0), new Vector3());
-                SetVelocity(id, new Vector3(0, -speed, 0), new Vector3());
+                var downStart = baseTime + tu + th;
+                AddCmd(downStart, () => SetVelocity(id, new Vector3(0, -speed, 0), Vector3.zero));
                 var ad = au;
-                SetAcceleration(id, new Vector3(0, ad, 0), new Vector3());
                 var td = tu;
-                AddCmd(Time.time + td, () => SetAcceleration(id, new Vector3(), new Vector3()));
-                AddCmd(Time.time + td, () => SetVelocity(id, new Vector3(), new Vector3()));
-                AddCmd(Time.time + td, () => SetPosition(id, targetPos, go.transform.eulerAngles));
+                AddCmd(downStart, () => SetAcceleration(id, new Vector3(0, ad, 0), Vector3.zero));
+                AddCmd(downStart + td, () => SetAcceleration(id, Vector3.zero, Vector3.zero));
+                AddCmd(downStart + td, () => SetVelocity(id, Vector3.zero, Vector3.zero));
+                AddCmd(downStart + td, () => SetPosition(id, targetPos, go.transform.eulerAngles));
             }
         }
 
         void Place(string id, GameObject go, Vector3 pos, Vector3 dir)
         {
             ObjectsById[id] = go;
+            // Debug.Log($"Placing object id={id} at pos={pos}, dir={dir}");
             // 激活对象（如果之前为不可见），再设置位置和朝向
             go.SetActive(true);
             go.name = $"Obj_{id}";

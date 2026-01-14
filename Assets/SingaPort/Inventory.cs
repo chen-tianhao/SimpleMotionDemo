@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -198,6 +199,14 @@ namespace Assets.SingaPort
             return null;
         }
 
+        public bool UnstackWithoutReshuffle(Container container)
+        {
+            Container? containerOnTop = Peek(container.Block, container.Slot);
+            if (containerOnTop == null) return true;
+            bool ret = container.Group == containerOnTop.Group;
+            return ret;
+        }
+
         public void Update(Container container, JobType opType)
         {
             if (container.Slot == null || container.Slot.Bay == 0 || container.Slot.Row == 0 || container.Slot.Tier == 0) 
@@ -250,7 +259,6 @@ namespace Assets.SingaPort
 
                     int depthFromTop = (stack.Count - 1) - idx; // 0 = 顶
                     int height = stack.Count; // ground slot height
-
                     bool better = false;
                     if (depthFromTop < bestDepth) better = true;
                     else if (depthFromTop == bestDepth)
@@ -262,7 +270,6 @@ namespace Assets.SingaPort
                             else if (bay == bestBay && row > bestRow) better = true;
                         }
                     }
-
                     if (better)
                     {
                         best = container;
@@ -271,13 +278,206 @@ namespace Assets.SingaPort
                         bestBay = bay;
                         bestRow = row;
                     }
-
                     // 找到匹配后即可跳出当前 stack 的搜索（更深层不会更优）
                     break;
                 }
             }
-
             return best;
+        }
+
+        public Slot? DecideReshuffleTarget(Container rContainer, Container refContainer)
+        {
+            var block = rContainer.Block;
+            int bay = rContainer.Slot.Bay;
+            bool IsForty(Container? ctn) => ctn != null && ctn.Size == ContainerSize.FortyFeet;
+            bool IsTwenty(Container? ctn) => ctn != null && ctn.Size == ContainerSize.TwentyFeet;
+            bool IsCurrentGS(Slot s) => s.Bay == rContainer.Slot.Bay && s.Row == rContainer.Slot.Row;
+            bool HasSamePswcTop(Slot s)
+            {
+                var top = Peek(block, new Slot(s.Bay, s.Row, 1));
+                return top != null && top.Group == refContainer.Group;
+            }
+
+            // 与 Allocate 保持一致：20 尺仅在 bay 或 bay-1 有 40 尺时阻塞
+            bool IsBayBlockedFor20(int b)
+            {
+                if (block == null) return false;
+                for (int row = 1; row <= block.NumRows; row++)
+                {
+                    var self = Peek(block, new Slot(b, row, 1));
+                    var left = b > 1 ? Peek(block, new Slot(b - 1, row, 1)) : null;
+                    var right = b < block.NumBays ? Peek(block, new Slot(b + 1, row, 1)) : null;
+
+                    if (IsForty(self)) return true;
+                    if (IsForty(left) && self != null && ReferenceEquals(left, self)) return true;
+                    if (IsForty(right) && self != null && ReferenceEquals(right, self)) return true;
+                }
+                return false;
+            }
+
+            // 40 尺需两侧无 20 且高度对齐（若顶层为 40，要求跨到同一只箱）
+            bool CanPlaceForty(int b, int row, out int tier)
+            {
+                tier = -1;
+                if (b >= block.NumBays) return false;
+                int h1 = GetHeight(block, new Slot(b, row, 1));
+                int h2 = GetHeight(block, new Slot(b + 1, row, 1));
+                var top1 = Peek(block, new Slot(b, row, 1));
+                var top2 = Peek(block, new Slot(b + 1, row, 1));
+                if (IsTwenty(top1) || IsTwenty(top2)) return false;
+                for (int r = 1; r <= block.NumRows; r++)
+                {
+                    if (IsTwenty(Peek(block, new Slot(b, r, 1)))) return false;
+                    if (IsTwenty(Peek(block, new Slot(b + 1, r, 1)))) return false;
+                }
+                bool topsCrossSameForty = IsForty(top1) && ReferenceEquals(top1, top2);
+                bool topsWithoutForty = !IsForty(top1) && !IsForty(top2);
+                if (!(h1 == h2 && (topsCrossSameForty || topsWithoutForty))) return false;
+                if (h1 >= block.MaxNumTiers) return false;
+                tier = h1 + 1;
+                return true;
+            }
+
+            // 当前 bay 是否所有行都已堆满（高度达上限）
+            bool BayFullyStacked(int b)
+            {
+                for (int row = 1; row <= block.NumRows; row++)
+                {
+                    if (GetHeight(block, new Slot(b, row, 1)) < block.MaxNumTiers) return false;
+                }
+                return true;
+            }
+
+            // 找到指定 bay 中同 PSWC 且未满的最高堆顶（返回下一可放置层），带尺寸约束
+            Slot? SamePswcTop(int b)
+            {
+                Slot? best = null;
+                int bestHeight = -1;
+                for (int row = 1; row <= block.NumRows; row++)
+                {
+                    var baseSlot = new Slot(b, row, 1);
+                    int tier = GetHeight(block, baseSlot);
+                    if (tier == 0 || tier >= block.MaxNumTiers) continue;
+                    var top = Peek(block, baseSlot);
+                    if (top == null || top.Group != refContainer.Group) continue;
+                    if (rContainer.Size == ContainerSize.TwentyFeet && IsBayBlockedFor20(b)) continue;
+                    int fortyTier = -1;
+                    if (rContainer.Size == ContainerSize.FortyFeet && !CanPlaceForty(b, row, out fortyTier)) continue;
+
+                    int curHeight = rContainer.Size == ContainerSize.FortyFeet ? fortyTier - 1 : tier;
+                    int nextTier = rContainer.Size == ContainerSize.FortyFeet ? fortyTier : tier + 1;
+                    var candidate = new Slot(b, row, nextTier);
+                    if (IsCurrentGS(candidate)) continue;
+                    if (curHeight > bestHeight)
+                    {
+                        bestHeight = curHeight;
+                        best = candidate;
+                    }
+                }
+                return best;
+            }
+
+            // 在指定 bay 中寻找离当前行最近的空槽（高度为 0），带尺寸约束
+            Slot? ClosestEmpty(int b)
+            {
+                Slot? best = null;
+                int bestDist = int.MaxValue;
+                for (int row = 1; row <= block.NumRows; row++)
+                {
+                    if (GetHeight(block, new Slot(b, row, 1)) != 0) continue;
+                    if (rContainer.Size == ContainerSize.TwentyFeet && IsBayBlockedFor20(b)) continue;
+                    int fortyTier = -1;
+                    if (rContainer.Size == ContainerSize.FortyFeet && !CanPlaceForty(b, row, out fortyTier)) continue;
+
+                    int dist = Math.Abs(row - rContainer.Slot.Row);
+                    if (dist < bestDist)
+                    {
+                        var candidate = new Slot(b, row, rContainer.Size == ContainerSize.FortyFeet ? fortyTier : 1);
+                        if (IsCurrentGS(candidate)) continue;
+                        bestDist = dist;
+                        best = candidate;
+                    }
+                }
+                return best;
+            }
+
+            // 在指定 bay 中选择未满且最高的槽位，若并列取行距离最近，带尺寸约束
+            Slot? TallestNonFull(int b)
+            {
+                Slot? best = null;
+                int bestHeight = -1;
+                int bestDist = int.MaxValue;
+                for (int row = 1; row <= block.NumRows; row++)
+                {
+                    int tier = GetHeight(block, new Slot(b, row, 1));
+                    if (tier >= block.MaxNumTiers) continue;
+                    if (rContainer.Size == ContainerSize.TwentyFeet && IsBayBlockedFor20(b)) continue;
+                    int fortyTier = -1;
+                    if (rContainer.Size == ContainerSize.FortyFeet && !CanPlaceForty(b, row, out fortyTier)) continue;
+
+                    int dist = Math.Abs(row - rContainer.Slot.Row);
+                    int curHeight = rContainer.Size == ContainerSize.FortyFeet ? fortyTier - 1 : tier;
+                    int nextTier = rContainer.Size == ContainerSize.FortyFeet ? fortyTier : tier + 1;
+                    var candidate = new Slot(b, row, nextTier);
+                    if (IsCurrentGS(candidate)) continue;
+                    if (curHeight > bestHeight || (curHeight == bestHeight && dist < bestDist))
+                    {
+                        bestHeight = curHeight;
+                        bestDist = dist;
+                        best = candidate;
+                    }
+                }
+                return best;
+            }
+
+            // Case A: current bay not fully stacked -> avoid gantry
+            if (!BayFullyStacked(bay))
+            {
+                var target = SamePswcTop(bay) ?? ClosestEmpty(bay) ?? TallestNonFull(bay);
+                if (target != null && !IsCurrentGS(target)) 
+                {
+                    // if (Config.traceReshuffleTarget) Info($"[{rContainer.ToString()}] [TargetSlot-CaseA] Target Slot: {target}");
+                    return target;
+                }
+            }
+
+            // Case B: bay is full -> gantry allowed, search across bays (closest by bay distance then row distance)
+            Slot? bestSlot = null;
+
+            // 跨 bay 选择候选槽：先比 bay 距离，再比行距离
+            Slot? PickAcross(Func<int, Slot?> picker, bool preferDifferentPswc)
+            {
+                Slot? chosen = null;
+                int chosenBayDist = int.MaxValue;
+                int chosenRowDist = int.MaxValue;
+                for (int b = 1; b <= block.NumBays; b++)
+                {
+                    var cand = picker(b);
+                    if (cand == null) continue;
+                    if (IsCurrentGS(cand)) continue;
+                    if (preferDifferentPswc && HasSamePswcTop(cand)) continue;
+                    int bayDist = Math.Abs(b - bay);
+                    int rowDist = Math.Abs(cand.Row - rContainer.Slot.Row);
+                    if (bayDist < chosenBayDist || (bayDist == chosenBayDist && rowDist < chosenRowDist))
+                    {
+                        chosen = cand;
+                        chosenBayDist = bayDist;
+                        chosenRowDist = rowDist;
+                    }
+                }
+                return chosen;
+            }
+
+            // 首先尝试避开与 refJob 同 PSWC 的顶箱；若不可行，再放宽约束
+            bestSlot = PickAcross(SamePswcTop, true)
+                        ?? PickAcross(ClosestEmpty, true)
+                        ?? PickAcross(TallestNonFull, true)
+                        ?? PickAcross(SamePswcTop, false)
+                        ?? PickAcross(ClosestEmpty, false)
+                        ?? PickAcross(TallestNonFull, false);
+            
+            // if (Config.traceReshuffleTarget) Info($"[{rContainer.ToString()}] [TargetSlot-CaseB] Target Slot: {bestSlot}");
+            return bestSlot;
         }
 
         private GroundSlot GetGroundSlot(Block block, Slot slot)
@@ -321,7 +521,7 @@ namespace Assets.SingaPort
             return top;
         }
 
-        private Container? Peek(Block block, Slot slot)
+        public Container? Peek(Block block, Slot slot)
         {
             var gs = GetGroundSlot(block, slot);
             return gs.gsStack.Count == 0 ? null : gs.gsStack[^1];
