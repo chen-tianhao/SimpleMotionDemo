@@ -352,9 +352,12 @@ namespace Assets
                 var au = speed * speed / (2 * offset);
                 var tu = speed / au;
                 SetAcceleration(id, new Vector3(0, -au, 0), new Vector3());
-                AddCmd(baseTime + tu, () => SetAcceleration(id, Vector3.zero, Vector3.zero));
-                AddCmd(baseTime + tu, () => SetVelocity(id, Vector3.zero, Vector3.zero));
-                AddCmd(baseTime + tu, () => SetPosition(id, pos + new Vector3(0, offset, 0), go.transform.eulerAngles));
+                AddCmd(baseTime + tu, () =>
+                {
+                    SetAcceleration(id, Vector3.zero, Vector3.zero);
+                    SetVelocity(id, Vector3.zero, Vector3.zero);
+                    SetPosition(id, pos + new Vector3(0, offset, 0), go.transform.eulerAngles);
+                });
 
                 // move horizontal toward target (only if there is horizontal displacement)
                 var horizontal = new Vector3(targetPos.x - pos.x, 0f, targetPos.z - pos.z);
@@ -365,11 +368,17 @@ namespace Assets
                     var dir = horizontal / dist;
                     var ah = speed * speed / (2 * dist);
                     th = speed / ah;
-                    AddCmd(baseTime + tu, () => SetVelocity(id, dir * speed, Vector3.zero));
-                    AddCmd(baseTime + tu, () => SetAcceleration(id, dir * -ah, Vector3.zero));
-                    AddCmd(baseTime + tu + th, () => SetAcceleration(id, Vector3.zero, Vector3.zero));
-                    AddCmd(baseTime + tu + th, () => SetVelocity(id, Vector3.zero, Vector3.zero));
-                    AddCmd(baseTime + tu + th, () => SetPosition(id, targetPos + new Vector3(0, offset, 0), go.transform.eulerAngles));
+                    AddCmd(baseTime + tu, () =>
+                    {
+                        SetVelocity(id, dir * speed, Vector3.zero);
+                        SetAcceleration(id, dir * -ah, Vector3.zero);
+                    });
+                    AddCmd(baseTime + tu + th, () =>
+                    {
+                        SetAcceleration(id, Vector3.zero, Vector3.zero);
+                        SetVelocity(id, Vector3.zero, Vector3.zero);
+                        SetPosition(id, targetPos + new Vector3(0, offset, 0), go.transform.eulerAngles);
+                    });
                 }
                 else
                 {
@@ -383,9 +392,12 @@ namespace Assets
                 var ad = au;
                 var td = tu;
                 AddCmd(downStart, () => SetAcceleration(id, new Vector3(0, ad, 0), Vector3.zero));
-                AddCmd(downStart + td, () => SetAcceleration(id, Vector3.zero, Vector3.zero));
-                AddCmd(downStart + td, () => SetVelocity(id, Vector3.zero, Vector3.zero));
-                AddCmd(downStart + td, () => SetPosition(id, targetPos, go.transform.eulerAngles));
+                AddCmd(downStart + td, () =>
+                {
+                    SetAcceleration(id, Vector3.zero, Vector3.zero);
+                    SetVelocity(id, Vector3.zero, Vector3.zero);
+                    SetPosition(id, targetPos, go.transform.eulerAngles);
+                });
             }
         }
 
