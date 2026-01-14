@@ -31,7 +31,9 @@ namespace Assets
         public int NumberOfGroup { get; private set; } = 12;
         public Dictionary<int, Group> DwellingGroupsByIndex = new Dictionary<int, Group>();
         internal Inventory inventory = new Inventory();
-
+        Simulator sim = new Simulator();
+        bool simStarted = false;
+        
         float StartTime;
 
         void Start()
@@ -114,14 +116,13 @@ namespace Assets
                 pos[1] = (slot.Tier - 1) * Block.SlotHeight;
                 pos[2] = (slot.Row - 1) * Block.SlotWidth;
                 AddCmd(t, () => Stack($"Ctn#{container.Index}", go, pos, 5f, 10f));
-                t += 1;
+                t += 2;
                 Debug.Log($"Stacking Ctn#{container.Index} at Bay {slot.Bay}, Row {slot.Row}, Tier {slot.Tier}");
 
                 if (block.NumTEUs > block.CapacityTEUs * 0.6) break;
             }
 
             // //AddCmd for unstacking containers
-            /*
             for (int i = 0; i < 10; i++)
             {
                 var emptyGroupKeys = DwellingGroupsByIndex.Where(kv => kv.Value.Containers.Count == 0).Select(kv => kv.Key).ToList();
@@ -151,7 +152,6 @@ namespace Assets
                 }
                 // if (block.NumTEUs < block.CapacityTEUs * 0.2) break;
             }
-            */
 
             // AddCmd for reshuffling containers
             /*
@@ -231,6 +231,12 @@ namespace Assets
 
         void Stack(string id, GameObject go, Vector3 pos, float speed, float offset)
         {
+            if (!simStarted)
+            {
+                simStarted = true;
+                sim.Arrive(1);
+                sim.Run(TimeSpan.FromMinutes(3));
+            }
             Place(id, go, pos + new Vector3(0, offset, 0), go.transform.eulerAngles);
             SetVelocity(id, new Vector3(0, -speed, 0), new Vector3());
             var a = speed * speed / (2 * offset);
@@ -253,7 +259,7 @@ namespace Assets
                 AddCmd(Time.time + t, () => SetAcceleration(id, new Vector3(), new Vector3()));
                 AddCmd(Time.time + t, () => SetVelocity(id, new Vector3(), new Vector3()));
                 AddCmd(Time.time + t, () => SetPosition(id, pos + new Vector3(0, offset, 0), go.transform.eulerAngles));
-                AddCmd(Time.time + t + 1, () => Remove(id));
+                AddCmd(Time.time + t + 0.5f, () => Remove(id));
             }
         }
 
