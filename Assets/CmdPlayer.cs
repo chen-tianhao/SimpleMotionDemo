@@ -43,6 +43,7 @@ namespace Assets
             var block = new Block(5, 8, 4);
             float t = 0;
 
+            ////////////////////////////////////////////////////////////////////////////////////////
             //AddCmd for stacking containers
             for (int i = 0; i < NumberOfGroup; i++)
             {
@@ -116,13 +117,14 @@ namespace Assets
                 pos[1] = (slot.Tier - 1) * Block.SlotHeight;
                 pos[2] = (slot.Row - 1) * Block.SlotWidth;
                 AddCmd(t, () => Stack($"Ctn#{container.Index}", go, pos, 5f, 10f));
-                t += 2;
+                t += 3;
                 Debug.Log($"Stacking Ctn#{container.Index} at Bay {slot.Bay}, Row {slot.Row}, Tier {slot.Tier}");
 
                 if (block.NumTEUs > block.CapacityTEUs * 0.6) break;
             }
 
-            // //AddCmd for unstacking containers
+            ////////////////////////////////////////////////////////////////////////////////////////
+            //AddCmd for unstacking containers
             for (int i = 0; i < 10; i++)
             {
                 var emptyGroupKeys = DwellingGroupsByIndex.Where(kv => kv.Value.Containers.Count == 0).Select(kv => kv.Key).ToList();
@@ -130,7 +132,7 @@ namespace Assets
                 {
                     DwellingGroupsByIndex.Remove(key);
                 }
-
+                // Randomly pick a non-empty group to unstack a "best" container from this group
                 var nonEmptyGroups = DwellingGroupsByIndex.Values.ToList();
                 if (nonEmptyGroups.Count > 0)
                 {
@@ -146,7 +148,7 @@ namespace Assets
                         inventory.Update(unstackingContainer, Inventory.JobType.Unstacking);
                         chosen.Containers.Remove(unstackingContainer);
                         AddCmd(t, () => Unstack($"Ctn#{unstackingContainer.Index}", 5f, 10f));
-                        t += 2;
+                        t += 3;
                         Debug.Log($"Unstacking Ctn#{unstackingContainer.Index} from Bay {unstackingContainer.Slot.Bay}, Row {unstackingContainer.Slot.Row}, Tier {unstackingContainer.Slot.Tier}");
                     }
                 }

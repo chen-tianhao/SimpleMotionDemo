@@ -225,7 +225,7 @@ namespace Assets.SingaPort
         {
             Container? best = null;
             int bestDepth = int.MaxValue; // 0 means top of stack
-            int bestHeight = int.MaxValue;
+            int bestHeight = int.MinValue;
             int bestBay = int.MinValue;
             int bestRow = int.MinValue;
 
