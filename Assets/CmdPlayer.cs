@@ -115,8 +115,8 @@ namespace Assets
                     pos[0] = Block.SlotLength * (slot.Bay / 2 - 0.5f); // 偶数是40尺箱，位于相邻两个奇数bay中间
                 pos[1] = (slot.Tier - 1) * Block.SlotHeight;
                 pos[2] = (slot.Row - 1) * Block.SlotWidth;
-                AddCmd(t, () => Stack($"Ctn#{container.Index}", go, pos, 5f, 10f));
-                t += 0.1f;
+                AddCmd(t, () => Stack($"Ctn#{container.Index}", go, pos));
+                t += 3;
 
                 if (block.NumTEUs > block.CapacityTEUs * 0.6) break;
             }
@@ -196,8 +196,8 @@ namespace Assets
                 {
                     inventory.Update(container, Inventory.JobType.Unstacking);
                     container.Group.Containers.Remove(container);
-                    AddCmd(t, () => Unstack($"Ctn#{container.Index}", 5f, 10f));
-                    t += 3;
+                    AddCmd(t, () => Unstack($"Ctn#{container.Index}"));
+                    t += 5;
                     Debug.Log($"Unstacking Ctn#{container.Index}(G#{container.Group.Index}) from Slot({container.Slot.Bay},{container.Slot.Row},{container.Slot.Tier})");
                 }
                 else // need to reshuffle first
@@ -249,7 +249,7 @@ namespace Assets
                 pos[1] = (targetSlot.Tier - 1) * Block.SlotHeight;
                 pos[2] = (targetSlot.Row - 1) * Block.SlotWidth;
 
-                AddCmd(t, () => Reshuffle($"Ctn#{container.Index}", pos, 5f, 10f));
+                AddCmd(t, () => Reshuffle($"Ctn#{container.Index}", pos));
                 t += 5;
 
                 // place to target slot
@@ -296,7 +296,7 @@ namespace Assets
             }
         }
 
-        void Stack(string id, GameObject go, Vector3 pos, float speed, float offset)
+        void Stack(string id, GameObject go, Vector3 pos, float speed = 10f, float offset = 20f)
         {
             if (!simStarted)
             {
@@ -314,7 +314,7 @@ namespace Assets
             AddCmd(Time.time + t, () => SetPosition(id, pos, go.transform.eulerAngles));
         }
 
-        void Unstack(string id, float speed, float offset)
+        void Unstack(string id, float speed = 10f, float offset = 20f)
         {
             if (ObjectsById.TryGetValue(id, out var go))
             {
@@ -335,7 +335,7 @@ namespace Assets
             }
         }
 
-        void Reshuffle(string id, Vector3 targetPos, float speed, float offset)
+        void Reshuffle(string id, Vector3 targetPos, float speed = 10f, float maxHeight = 20f)
         {
             if (ObjectsById.TryGetValue(id, out var go))
             {
@@ -347,57 +347,89 @@ namespace Assets
                 Vector3 pos = go.transform.position;
                 var baseTime = Time.time - StartTime; // Align with the same time axis used by the command queue
 
-                // move up
-                SetVelocity(id, new Vector3(0, speed, 0), new Vector3());
-                var au = speed * speed / (2 * offset);
-                var tu = speed / au;
-                SetAcceleration(id, new Vector3(0, -au, 0), new Vector3());
-                AddCmd(baseTime + tu, () =>
+                // ascend/descend to fixed cruise height
+                float cruiseY = maxHeight;
+                float dyUp = cruiseY - pos.y;
+                float ascendDist = Mathf.Abs(dyUp);
+                float tCursor = 0f;
+                if (ascendDist > 0.001f)
                 {
-                    SetAcceleration(id, Vector3.zero, Vector3.zero);
-                    SetVelocity(id, Vector3.zero, Vector3.zero);
-                    SetPosition(id, pos + new Vector3(0, offset, 0), go.transform.eulerAngles);
-                });
+                    float au = speed * speed / (2f * ascendDist);
+                    float tu = speed / au;
+                    Vector3 vDir = Vector3.up * Mathf.Sign(dyUp);
+                    AddCmd(baseTime + tCursor, () =>
+                    {
+                        SetVelocity(id, vDir * speed, Vector3.zero);
+                        SetAcceleration(id, vDir * -au, Vector3.zero);
+                    });
+                    AddCmd(baseTime + tCursor + tu, () =>
+                    {
+                        SetAcceleration(id, Vector3.zero, Vector3.zero);
+                        SetVelocity(id, Vector3.zero, Vector3.zero);
+                        SetPosition(id, new Vector3(pos.x, cruiseY, pos.z), go.transform.eulerAngles);
+                    });
+                    tCursor += tu;
+                }
+                else
+                {
+                    // already at cruise height
+                    SetPosition(id, new Vector3(pos.x, cruiseY, pos.z), go.transform.eulerAngles);
+                }
 
-                // move horizontal toward target (only if there is horizontal displacement)
+                // horizontal move at cruise height
                 var horizontal = new Vector3(targetPos.x - pos.x, 0f, targetPos.z - pos.z);
                 var dist = horizontal.magnitude;
                 float th = 0f;
-                if (dist > 0.01f)
+                if (dist > 0.001f)
                 {
                     var dir = horizontal / dist;
-                    var ah = speed * speed / (2 * dist);
+                    var ah = speed * speed / (2f * dist);
                     th = speed / ah;
-                    AddCmd(baseTime + tu, () =>
+                    AddCmd(baseTime + tCursor, () =>
                     {
                         SetVelocity(id, dir * speed, Vector3.zero);
                         SetAcceleration(id, dir * -ah, Vector3.zero);
                     });
-                    AddCmd(baseTime + tu + th, () =>
+                    AddCmd(baseTime + tCursor + th, () =>
                     {
                         SetAcceleration(id, Vector3.zero, Vector3.zero);
                         SetVelocity(id, Vector3.zero, Vector3.zero);
-                        SetPosition(id, targetPos + new Vector3(0, offset, 0), go.transform.eulerAngles);
+                        SetPosition(id, new Vector3(targetPos.x, cruiseY, targetPos.z), go.transform.eulerAngles);
                     });
+                    tCursor += th;
                 }
                 else
                 {
-                    // No horizontal move needed; jump to above target
-                    AddCmd(baseTime + tu, () => SetPosition(id, targetPos + new Vector3(0, offset, 0), go.transform.eulerAngles));
+                    // no horizontal move
+                    SetPosition(id, new Vector3(targetPos.x, cruiseY, targetPos.z), go.transform.eulerAngles);
                 }
                 
-                // move down
-                var downStart = baseTime + tu + th;
-                AddCmd(downStart, () => SetVelocity(id, new Vector3(0, -speed, 0), Vector3.zero));
-                var ad = au;
-                var td = tu;
-                AddCmd(downStart, () => SetAcceleration(id, new Vector3(0, ad, 0), Vector3.zero));
-                AddCmd(downStart + td, () =>
+                // descend to target
+                float dyDown = targetPos.y - cruiseY;
+                float descendDist = Mathf.Abs(dyDown);
+                if (descendDist > 0.001f)
                 {
-                    SetAcceleration(id, Vector3.zero, Vector3.zero);
-                    SetVelocity(id, Vector3.zero, Vector3.zero);
+                    float ad = speed * speed / (2f * descendDist);
+                    float td = speed / ad;
+                    Vector3 vDir = Vector3.up * Mathf.Sign(dyDown);
+                    AddCmd(baseTime + tCursor, () =>
+                    {
+                        SetVelocity(id, vDir * speed, Vector3.zero);
+                        SetAcceleration(id, vDir * -ad, Vector3.zero);
+                    });
+                    AddCmd(baseTime + tCursor + td, () =>
+                    {
+                        SetAcceleration(id, Vector3.zero, Vector3.zero);
+                        SetVelocity(id, Vector3.zero, Vector3.zero);
+                        SetPosition(id, targetPos, go.transform.eulerAngles);
+                    });
+                    tCursor += td;
+                }
+                else
+                {
+                    // already at target height
                     SetPosition(id, targetPos, go.transform.eulerAngles);
-                });
+                }
             }
         }
 
